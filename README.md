@@ -1,17 +1,17 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <title>Gece Yarışı - MAX Yol + 2 Şerit Boşluk + PNG Arabalar (Sprite) + Market + Pickup + Countdown + RearView</title>
+  <title>Gece Yarışı - Yeni Seviye Sistemi + Dans Dansçı + Ballon d'Or + Dinamik Araba</title>
   <style>
     body { margin:0; overflow:hidden; font-family:Arial; background:#000011;}
-    #menu,#gameover,#storeMenu,#countdownScreen{
+    #menu,#gameover,#storeMenu,#countdownScreen,#celebrationScreen{
       position:absolute; inset:0; display:flex; justify-content:center; align-items:center;
       flex-direction:column; color:white; background:rgba(0,0,0,0.90); text-align:center; z-index:10;
     }
     #storeMenu{ z-index:35; }
     #countdownScreen{ z-index:25; background:rgba(0,0,0,0.55); }
+    #celebrationScreen{ z-index:30; background:rgba(0,0,0,0.75); }
     button{ padding:14px 18px; font-size:18px; margin-top:10px; cursor:pointer; border-radius:10px; border:none;}
     .row{ display:flex; gap:14px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:10px;}
     .col{ display:flex; flex-direction:column; gap:6px; align-items:center; }
@@ -22,7 +22,7 @@
     #hud{
       position:absolute; top:10px; left:10px; color:white; font-size:15px; z-index:5;
       background:rgba(0,0,0,0.35); padding:10px 12px; border-radius:12px;
-      min-width:360px; user-select:none;
+      min-width:420px; user-select:none;
     }
 
     #bars{ position:absolute; bottom:18px; left:50%; transform:translateX(-50%); z-index:5; width:240px;}
@@ -81,13 +81,18 @@
 
     #countText{ font-size:64px; font-weight:800; letter-spacing:2px; text-shadow:0 10px 28px rgba(0,0,0,0.6); }
     #countSub{ margin-top:10px; font-size:16px; opacity:0.85; }
+    
+    #danceCanvas { display:block; margin:0 auto; width:300px; height:300px; }
+    #ballonDor { font-size:120px; animation:spin 2s infinite; }
+    @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
 
 <div id="menu">
-  <h1>Gece Yarışı</h1>
+  <h1>Gece Yarışı - YENI SEVIYE SİSTEMİ</h1>
   <div class="small">⬅️➡️ şerit | ↑ 120 | ↓ 80 | Shift drift | Space nitro | ALT durdur</div>
+  <div class="small" style="color:#ffff00; margin-top:6px;">🎯 HER LEVELDE ŞERİT VE ARABA ARTAR!</div>
 
   <div class="row" style="margin-top:14px;">
     <button onclick="startGame()">Başla</button>
@@ -110,25 +115,22 @@
   </div>
 
   <div class="row" style="margin-top:12px;">
-    <div class="col">
-      <label>Rakip Sayısı: <span id="rivalCountLabel">5</span> (min 5)</label>
-      <input type="range" id="rivalCountRange" min="5" max="12" step="1" value="5"/>
-      <div class="small">✅ Yol MAX genişlikte. ✅ Arabalar arasında 2 şerit boşluk.</div>
-    </div>
-  </div>
-
-  <div class="row" style="margin-top:12px;">
     <button onclick="toggleMuteFromMenu()" id="muteBtnMenu">Sesi Kapat</button>
   </div>
 
-  <div class="small" style="margin-top:8px;">
-    PNG dosyaları aynı klasörde olmalı: <b>player.png / rival.png / traffic.png / police.png</b>
+  <div class="small" style="margin-top:8px; color:#00ff88;">
+    ✨ 10 SEVIYE GEÇ = FUTBOL GOLÜ | 100 SEVIYE GEÇ = BALLON D'OR ✨
   </div>
 </div>
 
 <div id="countdownScreen" style="display:none;">
   <div id="countText">3</div>
   <div id="countSub">READY</div>
+</div>
+
+<div id="celebrationScreen" style="display:none;">
+  <canvas id="danceCanvas"></canvas>
+  <div id="celebrationText" style="font-size:32px; margin-top:20px; color:#ffff00;"></div>
 </div>
 
 <div id="gameover" style="display:none;">
@@ -147,8 +149,8 @@
         <h2>Market</h2>
         <div class="meta">
           Altın: <b><span id="goldText">0</span></b>
-          <span class="pill">Coin Bonus: x<span id="coinBonusText">1.0</span></span>
-          <span class="pill">Shield Stok: <span id="shieldInvText">0</span></span>
+          <span class="pill">Seviye: <span id="levelText">1</span></span>
+          <span class="pill">Shield: <span id="shieldInvText">0</span></span>
         </div>
       </div>
       <div class="row" style="margin:0;">
@@ -182,9 +184,24 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.128/build/three.min.js"></script>
 <script>
+/* ===================== LEVEL SYSTEM ===================== */
+let currentLevel = 1;
+const LEVEL_CONFIG = {
+  1: { target: 800, baseRivals: 5, rivalsIncrease: 0 },
+  2: { target: 900, baseRivals: 6, rivalsIncrease: 1 },
+  3: { target: 1000, baseRivals: 6, rivalsIncrease: 1 },
+  4: { target: 1100, baseRivals: 7, rivalsIncrease: 2 },
+  5: { target: 1200, baseRivals: 7, rivalsIncrease: 2 },
+  6: { target: 1300, baseRivals: 8, rivalsIncrease: 3 },
+  7: { target: 1400, baseRivals: 8, rivalsIncrease: 3 },
+  8: { target: 1500, baseRivals: 9, rivalsIncrease: 4 },
+  9: { target: 1600, baseRivals: 9, rivalsIncrease: 4 },
+  10: { target: 1700, baseRivals: 10, rivalsIncrease: 5 },
+};
+
 /* ===================== PROFILE SAVE ===================== */
-const SAVE_KEY = "nightRace_super_v3_maxRoad_gap2_spritePNG";
-function defaultProfile(){ return { gold:0, coinBonus:1.0, nitroMax:100, driftMax:100, shieldInv:0, magnetLevel:0, ts:Date.now() }; }
+const SAVE_KEY = "nightRace_v4_levels_celebrations";
+function defaultProfile(){ return { gold:0, level:1, nitroMax:100, driftMax:100, shieldInv:0, magnetLevel:0, speedBoost:0, handlingBoost:0, fuelTankLevel:0, crashResistance:0, radiusBoost:0, trafficSlower:0, ts:Date.now() }; }
 function loadProfile(){ try{ const raw=localStorage.getItem(SAVE_KEY); if(!raw) return defaultProfile(); return Object.assign(defaultProfile(), JSON.parse(raw)); }catch(e){ return defaultProfile(); } }
 function saveProfile(){ try{ profile.ts=Date.now(); localStorage.setItem(SAVE_KEY, JSON.stringify(profile)); }catch(e){} }
 let profile = loadProfile();
@@ -222,28 +239,22 @@ const DISTANCE_PER_REAL_MPS_SCALE=0.25;
 let rivalProgressM=[], rivalSlowT=[], rivalAiT=[];
 let rankText="1/1", percentile=100;
 
-let rivalHits=0;
-const MAX_RIVAL_HITS=2;
-
 let shieldActive=false;
 let coinCollectedThisRun=0;
 let pickupSpawnT=0;
 
-/* ===== TRAFFIC BOOST (TRAFİK ÇOĞALTILDI) ===== */
-const TRAFFIC_MULTIPLIER = 2.0;   // 1.0 normal, 2.0 çok kalabalık
+const TRAFFIC_MULTIPLIER = 2.0;
 let trafficSpawnT = 0;
 let maxTrafficCap = 0;
 
-/* ===== SAFE SPAWN (yanımızda pop-in olmasın) ===== */
 const SAFE_SPAWN = {
-  minXDist: 2.6,      // oyuncudan min yatay mesafe (carScale ile çarpılacak)
-  maxTries: 14,       // şerit seçmek için deneme sayısı
-  spawnZMin: 520,     // spawn uzaklığı min (negatifte kullanılacak)
-  spawnZRand: 420,    // spawn uzaklığı random aralık
-  forbidNearZBand: 120// oyuncuya yakın z bandı (ek güvenlik)
+  minXDist: 2.6,
+  maxTries: 14,
+  spawnZMin: 520,
+  spawnZRand: 420,
+  forbidNearZBand: 120
 };
 
-/* ===== UI ===== */
 const hud = document.getElementById("hud");
 const mini = document.getElementById("minimap");
 const miniCtx = mini.getContext("2d");
@@ -251,32 +262,33 @@ const hitFlash = document.getElementById("hitFlash");
 const rearWrap = document.getElementById("rearViewWrap");
 const rearTitle = document.getElementById("rearTitle");
 
-/* ===================== MAX ROAD + GAP 2 LANES ===================== */
 const MAX_ROAD_WIDTH = 72;
 let laneCount=0, laneSpacing=0, roadWidth=MAX_ROAD_WIDTH, playerClampX=0, carScale=1;
 
 function rebuildLaneSystem(){
-  const totalCars = (rivalsCountSetting + 1);
-  laneCount = 3*totalCars - 2;         // araba—boş—boş—araba
+  const cfg = LEVEL_CONFIG[currentLevel] || LEVEL_CONFIG[10];
+  const totalCars = cfg.baseRivals + cfg.rivalsIncrease;
+  laneCount = 3*totalCars - 2;
   roadWidth = MAX_ROAD_WIDTH;
   laneSpacing = roadWidth / Math.max(1,(laneCount-1));
   playerClampX = roadWidth/2 - 3.2;
   const baseCarWidth = 3.2;
   carScale = Math.min(1, Math.max(0.55, laneSpacing / baseCarWidth));
 }
+
 function lanesX(){
   const xs=[];
   const start = -((laneCount-1)/2) * laneSpacing;
   for(let i=0;i<laneCount;i++) xs.push(start + i*laneSpacing);
   return xs;
 }
+
 function occupiedLaneIndices(){
   const idx=[];
   for(let i=0;i<laneCount;i+=3) idx.push(i);
   return idx;
 }
 
-/* ===================== ROAD TEXTURE (laneCount aware) ===================== */
 function createRoadTextureDynamic(lc){
   const c=document.createElement("canvas"); c.width=1024; c.height=2048;
   const ctx=c.getContext("2d");
@@ -334,7 +346,6 @@ function createRoadTextureDynamic(lc){
   return tex;
 }
 
-/* ===================== PNG TEXTURES ===================== */
 const textureUrls = {
   player: "player.png",
   rival: "rival.png",
@@ -361,7 +372,6 @@ function loadCarTextures(){
   });
 }
 
-/* ===================== CAR SPRITE FACTORY ===================== */
 function createCarSprite(kind, fallbackColor){
   if (textures[kind] && textures[kind].image){
     const tex = textures[kind];
@@ -421,13 +431,16 @@ function createFallbackCar(colorHex){
   return car;
 }
 
-/* ===================== MENU HANDLERS ===================== */
 const rivalCountRange=document.getElementById("rivalCountRange");
 const rivalCountLabel=document.getElementById("rivalCountLabel");
-rivalCountRange.addEventListener("input", e=>{
-  rivalsCountSetting = Math.max(5, parseInt(e.target.value,10));
-  rivalCountLabel.textContent = rivalsCountSetting;
-});
+
+if(rivalCountRange){
+  rivalCountRange.addEventListener("input", e=>{
+    rivalsCountSetting = Math.max(5, parseInt(e.target.value,10));
+    rivalCountLabel.textContent = rivalsCountSetting;
+  });
+}
+
 document.getElementById("colorPicker").addEventListener("change", e=> playerColor=e.target.value);
 document.getElementById("oncomingColorPicker").addEventListener("change", e=> oncomingColor=e.target.value);
 document.getElementById("rivalColorPicker").addEventListener("change", e=> rivalColor=e.target.value);
@@ -437,7 +450,6 @@ window.addEventListener("load", ()=>{
   renderStoreList();
 });
 
-/* ===================== OPTIONAL AUDIO ===================== */
 let motorAudio, driftAudio;
 try{ motorAudio=new Audio('motor.mp3'); motorAudio.loop=true; motorAudio.volume=0.18;
      driftAudio=new Audio('drift.mp3'); driftAudio.loop=true; driftAudio.volume=0.22; }catch(e){}
@@ -454,7 +466,6 @@ function updateMuteButtons(){
   if(btn) btn.textContent=text;
 }
 
-/* ===================== COUNTDOWN ===================== */
 function showCountdown(){
   raceState="countdown"; countdownT=0;
   document.getElementById("countdownScreen").style.display="flex";
@@ -466,14 +477,175 @@ function setCountdownText(main,sub){
 }
 function hideCountdown(){ document.getElementById("countdownScreen").style.display="none"; }
 
-/* ===================== STORE ===================== */
 function openStore(){ raceState="store"; document.getElementById("storeMenu").style.display="flex"; renderStoreList(); }
 function closeStore(){ document.getElementById("storeMenu").style.display="none"; if(document.getElementById("menu").style.display!=="none") raceState="menu"; }
 
+/* ===================== DANCE ANIMATIONS (10 DANSA) ===================== */
+const dances = [
+  { name: "Fortnite Emote", draw: drawFortniteDance },
+  { name: "Robot Hareket", draw: drawRobotDance },
+  { name: "Ruh Ayrılma", draw: drawSpiritDance },
+  { name: "Beyaz Hareket", draw: drawWhiteDance },
+  { name: "Kıızırma", draw: drawSpinDance },
+  { name: "Sallama", draw: drawWaveDance },
+  { name: "Oturma Yükseliş", draw: drawJacksonDance },
+  { name: "Floss Dans", draw: drawFlossDance },
+  { name: "Yıl Sonu Kutlaması", draw: drawCelebrationDance },
+  { name: "Futbol Sevinç", draw: drawFootballCelebration }
+];
+
+function drawFortniteDance(ctx, x, y, t){
+  ctx.fillStyle="rgba(50,200,255,0.8)"; ctx.fillRect(x-25,y-60,50,120);
+  ctx.fillStyle="rgba(200,50,255,0.8)"; ctx.fillRect(x-15,y-40+Math.sin(t*6)*10,30,80);
+  ctx.fillStyle="rgba(255,150,0,1)"; ctx.beginPath(); ctx.arc(x,y-70,15,0,Math.PI*2); ctx.fill();
+}
+
+function drawRobotDance(ctx, x, y, t){
+  const bx = Math.sin(t*8)*8;
+  ctx.strokeStyle="rgba(150,150,150,0.9)"; ctx.lineWidth=6;
+  ctx.beginPath(); ctx.moveTo(x-30+bx,y-60); ctx.lineTo(x-20,y+40); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x+30-bx,y-60); ctx.lineTo(x+20,y+40); ctx.stroke();
+  ctx.fillStyle="rgba(200,200,0,0.9)"; ctx.fillRect(x-20,y-70,40,15);
+}
+
+function drawRuhAyrılma(ctx, x, y, t){
+  const a = Math.sin(t*4)*0.3;
+  ctx.globalAlpha=0.6+Math.cos(t*5)*0.4;
+  ctx.fillStyle="rgba(200,100,255,0.8)"; ctx.fillRect(x-25+Math.sin(t*6)*15,y-60,50,100);
+  ctx.globalAlpha=1;
+}
+
+function drawSpiritDance(ctx, x, y, t){
+  ctx.fillStyle="rgba(100,255,100,0.7)";
+  for(let i=0;i<4;i++){
+    const angle = (t*4 + i*Math.PI/2);
+    const px = x + Math.cos(angle)*30;
+    const py = y - 40 + Math.sin(angle)*20;
+    ctx.beginPath(); ctx.arc(px,py,10,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawWhiteDance(ctx, x, y, t){
+  ctx.fillStyle="rgba(255,255,255,0.8)"; ctx.fillRect(x-20,y-60,40,120);
+  ctx.fillStyle="rgba(0,0,0,0.9)"; ctx.fillRect(x-5,y-50+Math.cos(t*5)*5,10,10);
+  ctx.fillRect(x-5,y+20+Math.cos(t*5)*5,10,10);
+}
+
+function drawSpinDance(ctx, x, y, t){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(t*8);
+  ctx.fillStyle="rgba(255,100,50,0.8)"; ctx.fillRect(-25,-60,50,120);
+  ctx.restore();
+}
+
+function drawWaveDance(ctx, x, y, t){
+  ctx.fillStyle="rgba(50,150,255,0.8)";
+  for(let i=0;i<5;i++){
+    const yOffset = Math.sin(t*4 - i*0.5)*15;
+    ctx.fillRect(x-20+i*10,y-50+yOffset,8,80);
+  }
+}
+
+function drawJacksonDance(ctx, x, y, t){
+  const lean = Math.sin(t*3)*15;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(lean*Math.PI/180);
+  ctx.fillStyle="rgba(0,0,0,0.8)"; ctx.fillRect(-25,-60,50,120);
+  ctx.fillStyle="rgba(255,255,255,0.8)"; ctx.fillRect(-5,-55,10,15);
+  ctx.restore();
+}
+
+function drawFlossDance(ctx, x, y, t){
+  const armL = Math.cos(t*6)*30;
+  const armR = Math.cos(t*6+Math.PI)*30;
+  ctx.strokeStyle="rgba(150,100,255,0.8)"; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-20+armL,y-30); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x+20+armR,y-30); ctx.stroke();
+  ctx.fillStyle="rgba(255,200,0,0.8)"; ctx.fillRect(x-25,y+20,50,30);
+}
+
+function drawCelebrationDance(ctx, x, y, t){
+  ctx.fillStyle="rgba(0,255,0,0.8)"; ctx.fillRect(x-25,y-60,50,120);
+  ctx.fillStyle="rgba(255,0,0,0.8)"; ctx.fillRect(x-15,y-40+Math.sin(t*5)*10,30,80);
+  for(let i=0;i<8;i++){
+    const a = (i/8)*Math.PI*2 + t*4;
+    const px = x + Math.cos(a)*40;
+    const py = y - 30 + Math.sin(a)*30;
+    ctx.fillStyle=`rgba(${Math.sin(t+i)*128+128},${Math.cos(t+i)*128+128},255,0.6)`;
+    ctx.beginPath(); ctx.arc(px,py,5,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawFootballCelebration(ctx, x, y, t){
+  ctx.fillStyle="rgba(255,200,0,0.9)";
+  ctx.beginPath(); ctx.arc(x,y-70,20,0,Math.PI*2); ctx.fill(); // ball
+  ctx.fillStyle="rgba(255,0,0,0.8)"; ctx.fillRect(x-25,y-40+Math.sin(t*6)*15,50,100);
+  ctx.fillStyle="rgba(255,255,255,0.8)"; ctx.beginPath(); ctx.arc(x-5,y-30,8,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+5,y-30,8,0,Math.PI*2); ctx.fill();
+}
+
+function showCelebration(isFootballGoal){
+  raceState="celebration";
+  const celScreen = document.getElementById("celebrationScreen");
+  celScreen.style.display="flex";
+  
+  const canvas = document.getElementById("danceCanvas");
+  const ctx = canvas.getContext("2d");
+  const text = document.getElementById("celebrationText");
+  
+  let celebT=0;
+  const danceIdx = isFootballGoal ? 9 : Math.floor(Math.random()*10);
+  const dance = dances[danceIdx];
+  
+  const celebAnimate = () => {
+    celebT+=0.016;
+    ctx.fillStyle="rgba(0,0,0,0.2)"; ctx.fillRect(0,0,300,300);
+    dance.draw(ctx, 150, 150, celebT);
+    text.textContent = dance.name;
+    
+    if(celebT<2.5) requestAnimationFrame(celebAnimate);
+    else {
+      celScreen.style.display="none";
+      if(!isFootballGoal) startNextLevel();
+      else handleFootballGoal();
+    }
+  };
+  celebAnimate();
+}
+
+function handleFootballGoal(){
+  alert("⚽ FUTBOL GOLÜ! 10. SEVİYEYE ULAŞTIN! ⚽");
+  startNextLevel();
+}
+
+function startNextLevel(){
+  currentLevel++;
+  profile.level = currentLevel;
+  saveProfile();
+  
+  if(currentLevel===100){
+    showBallonDor();
+  } else {
+    init();
+  }
+}
+
+function showBallonDor(){
+  alert("🏆 BALLON D'OR ÖDÜLÜ KAZANDIN! 100. SEVIYEYE ULAŞTINIZ! 🏆\n\nTebrikler!!");
+  currentLevel = 1;
+  profile.level = 1;
+  profile.gold += 10000;
+  saveProfile();
+  location.reload();
+}
+
 function renderStoreList(){
   profile=loadProfile();
+  currentLevel = profile.level;
   document.getElementById("goldText").textContent=profile.gold;
-  document.getElementById("coinBonusText").textContent=profile.coinBonus.toFixed(1);
+  document.getElementById("levelText").textContent=profile.level;
   document.getElementById("shieldInvText").textContent=profile.shieldInv;
 
   const list=document.getElementById("storeList");
@@ -482,14 +654,24 @@ function renderStoreList(){
   const items=[
     { title:"Kalkan (1 kullanım)", sub:"Yarışta 1 çarpışmayı emer.", price:30,
       canBuy:()=>true, buy:()=>{ profile.shieldInv+=1; } },
-    { title:"Coin Bonus +0.1", sub:"Topladığın ve ödül coinleri artar. (max x2.0)", price:60,
-      canBuy:()=>profile.coinBonus<2.0, buy:()=>{ profile.coinBonus=Math.min(2.0, profile.coinBonus+0.1); } },
-    { title:"Nitro Tank +10", sub:"Nitro maksimumu artar. (max 160)", price:55,
-      canBuy:()=>profile.nitroMax<160, buy:()=>{ profile.nitroMax=Math.min(160, profile.nitroMax+10); } },
-    { title:"Drift Limit +10", sub:"Drift maksimumu artar. (max 160)", price:55,
-      canBuy:()=>profile.driftMax<160, buy:()=>{ profile.driftMax=Math.min(160, profile.driftMax+10); } },
-    { title:"Mıknatıs (level +1)", sub:"Yakındaki coinleri daha kolay toplarsın. (max 3)", price:80,
-      canBuy:()=>profile.magnetLevel<3, buy:()=>{ profile.magnetLevel+=1; } },
+    { title:"Hız Artışı +15 km/h", sub:"En yüksek hız artar. (max 180)", price:75,
+      canBuy:()=>profile.speedBoost<80, buy:()=>{ profile.speedBoost=Math.min(80, profile.speedBoost+15); } },
+    { title:"Nitro Tank +20", sub:"Nitro maksimumu artar. (max 200)", price:65,
+      canBuy:()=>profile.nitroMax<200, buy:()=>{ profile.nitroMax=Math.min(200, profile.nitroMax+20); } },
+    { title:"Drift Limit +20", sub:"Drift maksimumu artar. (max 200)", price:65,
+      canBuy:()=>profile.driftMax<200, buy:()=>{ profile.driftMax=Math.min(200, profile.driftMax+20); } },
+    { title:"Mıknatıs Seviye +1", sub:"Coin çekme mesafesi artar. (max 5)", price:90,
+      canBuy:()=>profile.magnetLevel<5, buy:()=>{ profile.magnetLevel+=1; } },
+    { title:"Handling Upgrade", sub:"Daha iyi oto dönüş. (max 5)", price:80,
+      canBuy:()=>profile.handlingBoost<5, buy:()=>{ profile.handlingBoost+=1; } },
+    { title:"Yakıt Deposu +1", sub:"Daha uzun mesafeye çık. (max 5)", price:85,
+      canBuy:()=>profile.fuelTankLevel<5, buy:()=>{ profile.fuelTankLevel+=1; } },
+    { title:"Çarpışma Direnci", sub:"Hasar daha az. (max 3)", price:95,
+      canBuy:()=>profile.crashResistance<3, buy:()=>{ profile.crashResistance+=1; } },
+    { title:"Çekim Yarıçapı Genişlet", sub:"Coin çekim alanı büyüyor. (max 4)", price:70,
+      canBuy:()=>profile.radiusBoost<4, buy:()=>{ profile.radiusBoost+=1; } },
+    { title:"Trafik Yavaşlat", sub:"Trafikler daha yavaş hareket eder. (max 3)", price:100,
+      canBuy:()=>profile.trafficSlower<3, buy:()=>{ profile.trafficSlower+=1; } },
   ];
 
   for(const it of items){
@@ -515,7 +697,6 @@ function renderStoreList(){
   }
 }
 
-/* ===================== COUNTDOWN STATE ===================== */
 function startGame(){
   document.getElementById("menu").style.display="none";
   init();
@@ -528,7 +709,13 @@ function startGame(){
 }
 
 async function init(){
+  profile=loadProfile();
+  currentLevel = profile.level;
   rebuildLaneSystem();
+
+  const cfg = LEVEL_CONFIG[currentLevel] || LEVEL_CONFIG[10];
+  levelTargetM = cfg.target;
+  rivalsCountSetting = cfg.baseRivals + cfg.rivalsIncrease;
 
   maxTrafficCap = Math.floor(Math.max(24, laneCount * 3.2 * TRAFFIC_MULTIPLIER));
   trafficSpawnT = 0.4;
@@ -577,11 +764,9 @@ async function init(){
   roadMesh.position.z=-1400;
   scene.add(roadMesh);
 
-  profile=loadProfile();
   nitro=profile.nitroMax;
   driftLimit=profile.driftMax;
   coinCollectedThisRun=0;
-  rivalHits=0;
   shieldActive=false;
 
   if(profile.shieldInv>0){
@@ -615,7 +800,6 @@ function clearAll(){
   if(hitFlash) hitFlash.style.opacity="0";
 }
 
-/* ===================== SAFE SPAWN HELPERS ===================== */
 function pickSafeTrafficX(){
   const xs = lanesX();
   const playerX = playerCar ? playerCar.position.x : 0;
@@ -656,7 +840,6 @@ function applySafeRespawn(obj){
   obj.position.x = pickSafeTrafficX();
   obj.position.z = pickSafeSpawnZ();
 
-  // ekstra güvenlik: yanlışlıkla oyuncuya çok yakın bir band oluşmasın
   if(playerCar){
     const dz = Math.abs(obj.position.z - playerCar.position.z);
     if(dz < SAFE_SPAWN.forbidNearZBand){
@@ -665,7 +848,6 @@ function applySafeRespawn(obj){
   }
 }
 
-/* ===================== SPAWNS ===================== */
 function spawnTrafficCar(){
   const t = createCarSprite("traffic", oncomingColor);
   t.userData.type="traffic";
@@ -680,7 +862,6 @@ function spawnActors(playerLaneIndex){
   const xs=lanesX();
   const occ=occupiedLaneIndices();
 
-  // Trafik çoğaltıldı
   const trafficCount = Math.max(22, Math.floor(laneCount*1.25*TRAFFIC_MULTIPLIER));
   for(let i=0;i<trafficCount;i++){
     spawnTrafficCar();
@@ -717,7 +898,6 @@ function spawnActors(playerLaneIndex){
   }
 }
 
-/* ===================== PICKUPS ===================== */
 function createPickupMesh(type){
   let geom, mat;
   if(type==="coin"){
@@ -731,6 +911,7 @@ function createPickupMesh(type){
   m.scale.set(carScale,carScale,carScale);
   return m;
 }
+
 function spawnPickup(type){
   const mesh=createPickupMesh(type);
   mesh.userData.type="pickup";
@@ -746,16 +927,15 @@ function spawnPickup(type){
   pickups.push({mesh,type});
 }
 
-/* ===================== COLLISION + EFFECT ===================== */
 function boxHit(a,b,zx=2.0,zz=3.0){
   return Math.abs(a.position.x-b.position.x) < zx*carScale && Math.abs(a.position.z-b.position.z) < zz*carScale;
 }
+
 function flashHit(){
   hitFlash.style.opacity="0.75";
   setTimeout(()=> hitFlash.style.opacity="0", 80);
 }
 
-/* ===================== RANKING + REWARD ===================== */
 function computeRanking(){
   const total=rivals.length+1;
   let ahead=0;
@@ -767,18 +947,19 @@ function computeRanking(){
   percentile = (total<=1) ? 100 : Math.round(100*(1-(rank-1)/(total-1)));
   return {rank,total,percentile};
 }
+
 function rewardGoldOnFinish(){
   profile=loadProfile();
   const {rank,total,percentile:pct}=computeRanking();
   const base=5+Math.round((pct/100)*25);
-  const coinReward=Math.round(coinCollectedThisRun * profile.coinBonus);
+  const coinReward=Math.round(coinCollectedThisRun * 1.0);
   const totalReward=base+coinReward;
   profile.gold += totalReward;
+  profile.level = currentLevel;
   saveProfile();
   return {rank,total,pct,base,coinReward,totalReward};
 }
 
-/* ===================== MINIMAP ===================== */
 function drawMiniMap(){
   const ctx=miniCtx, w=mini.width, h=mini.height;
   ctx.clearRect(0,0,w,h);
@@ -811,12 +992,11 @@ function drawMiniMap(){
 
   ctx.fillStyle="rgba(255,255,255,0.7)";
   ctx.font="12px Arial";
-  ctx.fillText(`Sıra ${rankText} (%${percentile})`, 18, 26);
-  ctx.fillText(`Şerit: ${laneCount} (gap2)`, 18, 44);
+  ctx.fillText(`L${currentLevel} Sıra ${rankText} (%${percentile})`, 18, 26);
+  ctx.fillText(`Şerit: ${laneCount}`, 18, 44);
   ctx.fillText(`Yol: MAX ${MAX_ROAD_WIDTH}`, 18, 62);
 }
 
-/* ===================== GAMEOVER ===================== */
 function gameOver(title,text){
   raceState="gameover";
   if(motorAudio) motorAudio.pause();
@@ -825,9 +1005,9 @@ function gameOver(title,text){
   document.getElementById("finalText").textContent=text;
   document.getElementById("gameover").style.display="flex";
 }
+
 function restartGame(){ location.reload(); }
 
-/* ===================== RENDER MAIN + REAR VIEW ===================== */
 function renderTwoViews(){
   renderer.setScissorTest(false);
   renderer.setViewport(0,0, window.innerWidth, window.innerHeight);
@@ -856,7 +1036,6 @@ function renderTwoViews(){
   rearTitle.textContent="Arka Görüş";
 }
 
-/* ===================== MAIN LOOP ===================== */
 function animate(t){
   requestAnimationFrame(animate);
   const dt=Math.min(0.05,(t-lastTime)/1000);
@@ -864,7 +1043,6 @@ function animate(t){
 
   if(!renderer||!scene||!camera) return;
 
-  // countdown
   if(raceState==="countdown"){
     countdownT+=dt;
     if(countdownT<1.0) setCountdownText("3","READY");
@@ -880,7 +1058,6 @@ function animate(t){
     return;
   }
 
-  // player speed
   if(keys["ArrowUp"]) targetSpeedKmh=maxSpeedKmh;
   else if(keys["ArrowDown"]) targetSpeedKmh=minSpeedKmh;
   else targetSpeedKmh=cruiseSpeedKmh;
@@ -900,18 +1077,15 @@ function animate(t){
   if(nitroActive) nitro=Math.max(0, nitro-28*dt);
   else nitro=Math.min(nitroMax, nitro+10*dt);
 
-  // steer
   const steer=10*dt;
   if(keys["ArrowLeft"]) playerCar.position.x -= steer;
   if(keys["ArrowRight"]) playerCar.position.x += steer;
   playerCar.position.x = Math.max(-playerClampX, Math.min(playerClampX, playerCar.position.x));
 
-  // world speed
   let worldSpeed=(speedKmh/200);
   if(drifting) worldSpeed*=1.25;
   if(nitroActive) worldSpeed*=1.9;
 
-  // distance
   let effectiveKmh=speedKmh;
   if(drifting) effectiveKmh*=1.15;
   if(nitroActive) effectiveKmh*=1.5;
@@ -919,10 +1093,8 @@ function animate(t){
   const mps=(effectiveKmh/3.6)*DISTANCE_PER_REAL_MPS_SCALE;
   distanceM += mps*dt;
 
-  // road scroll
   if(roadTex) roadTex.offset.y -= (worldSpeed*0.18)*dt;
 
-  /* ===== EK TRAFİK SPAWN (kalabalık koru) ===== */
   trafficSpawnT -= dt;
   if(trafficSpawnT <= 0){
     if(oncomingCars.length < maxTrafficCap){
@@ -932,11 +1104,9 @@ function animate(t){
     trafficSpawnT = 0.65 + Math.random()*0.85;
   }
 
-  // traffic
   for(const c of oncomingCars){
-    c.position.z += worldSpeed*120*dt;
+    c.position.z += worldSpeed*120*dt * (1 - profile.trafficSlower*0.1);
 
-    // ÇARPMADA ÖL (kalkan varsa 1 kere kurtarır)
     if(boxHit(c,playerCar,2.0,3.0)){
       if(shieldActive){
         shieldActive=false;
@@ -945,7 +1115,7 @@ function animate(t){
       } else {
         const {rank,total,percentile:pct}=computeRanking();
         flashHit();
-        gameOver("Kaza Yaptın", `Trafiğe çarptın! | Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
+        gameOver("Kaza Yaptın", `Trafiğe çarptın! L${currentLevel} | Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
         return;
       }
     }
@@ -955,13 +1125,12 @@ function animate(t){
     }
   }
 
-  // pickups
   pickupSpawnT -= dt;
   if(pickupSpawnT<=0){
     spawnPickup(Math.random()<0.75 ? "coin" : "shield");
     pickupSpawnT = 1.6 + Math.random()*1.9;
   }
-  const magnetRadius = (2.2 + profile.magnetLevel*1.3) * (carScale<0.75 ? 1.2 : 1.0);
+  const magnetRadius = (2.2 + profile.magnetLevel*1.3 + profile.radiusBoost*0.8) * (carScale<0.75 ? 1.2 : 1.0);
 
   for(let i=pickups.length-1;i>=0;i--){
     const p=pickups[i];
@@ -989,7 +1158,6 @@ function animate(t){
     }
   }
 
-  // rivals
   for(let i=0;i<rivals.length;i++){
     const r=rivals[i];
     rivalAiT[i]+=dt;
@@ -1014,7 +1182,6 @@ function animate(t){
       }
     }
 
-    // RAKİBE ÇARPMADA ÖL (kalkan varsa 1 kere kurtarır)
     if(boxHit(r,playerCar,2.1,3.2)){
       if(shieldActive){
         shieldActive=false;
@@ -1024,13 +1191,12 @@ function animate(t){
       } else {
         const {rank,total,percentile:pct}=computeRanking();
         flashHit();
-        gameOver("Kaza Yaptın", `Rakibe çarptın! | Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
+        gameOver("Kaza Yaptın", `Rakibe çarptın! L${currentLevel} | Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
         return;
       }
     }
   }
 
-  // police fixed 100
   if(policeCar){
     policeCar.position.x += (playerCar.position.x - policeCar.position.x)*0.04;
 
@@ -1045,7 +1211,7 @@ function animate(t){
         shieldActive=false; policeCar.position.z=90; flashHit();
       }else{
         const {rank,total,percentile:pct}=computeRanking();
-        gameOver("Polis Yakaladı", `Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
+        gameOver("Polis Yakaladı", `L${currentLevel} | Sıra: ${rank}/${total} (%${pct}) | Coin: ${coinCollectedThisRun}`);
         return;
       }
     }
@@ -1055,33 +1221,48 @@ function animate(t){
 
   if(distanceM >= levelTargetM){
     const reward=rewardGoldOnFinish();
+    
+    if(currentLevel===10 || currentLevel===100){
+      showCelebration(currentLevel===10);
+      return;
+    }
+    
+    currentLevel++;
     document.getElementById("menu").style.display="flex";
     openStore();
     alert(
-      `Yarış Bitti!\nSıra: ${reward.rank}/${reward.total} (%${reward.pct})\n`+
+      `Seviye ${currentLevel-1} Tamamlandı!\nSıra: ${reward.rank}/${reward.total} (%${reward.pct})\n`+
       `Ödül: ${reward.base} + Coin: ${reward.coinReward} = ${reward.totalReward} altın\n`+
-      `Coin: ${coinCollectedThisRun}\nŞerit: ${laneCount} (gap2) | Yol: MAX ${MAX_ROAD_WIDTH}`
+      `Şerit: ${laneCount} | Araba: ${rivalsCountSetting}`
     );
     raceState="menu";
     return;
   }
 
-  // camera forward
   camera.position.x = playerCar.position.x;
   camera.position.y = 8.5;
   camera.position.z = 38;
   camera.lookAt(new THREE.Vector3(playerCar.position.x, 1.2, playerCar.position.z - 110));
 
   hud.innerHTML =
+    `<span style="color:#ffff00;">SEVIYE ${currentLevel}</span><br>`+
     `Mesafe: ${Math.floor(distanceM)} / ${levelTargetM} m<br>`+
     `Hız: ${Math.floor(speedKmh)} km/h<br>`+
     `Nitro: ${Math.floor(nitro)} / ${profile.nitroMax}<br>`+
     `Drift: ${Math.floor(driftLimit)} / ${profile.driftMax}<br>`+
     `Trafik: ${oncomingCars.length} / ${maxTrafficCap}<br>`+
-    `Rakip: ${rivals.length} | Şerit: ${laneCount} (gap2)<br>`+
+    `Rakip: ${rivals.length} | Şerit: ${laneCount}<br>`+
     `Sıra: ${rankText} (%${percentile})<br>`+
-    `Coin: ${coinCollectedThisRun} | Market Altın: ${loadProfile().gold}<br>`+
-    `Kalkan: ${shieldActive ? "Aktif" : "Yok"}<br>`+
-    `Polis: ${POLICE_KMH} km/h`;
+    `Coin: ${coinCollectedThisRun} | Altın: ${profile.gold}<br>`+
+    `Kalkan: ${shieldActive ? "✅ Aktif" : "❌ Yok"}`;
 
-  document.getElementById("nitroFill").style.width = ((nitro/profile.nitroMax)*240
+  document.getElementById("nitroFill").style.width = ((nitro/profile.nitroMax)*240)+"px";
+  document.getElementById("driftFill").style.width = ((driftLimit/profile.driftMax)*240)+"px";
+
+  renderTwoViews();
+  drawMiniMap();
+}
+
+</script>
+</body>
+</html>
