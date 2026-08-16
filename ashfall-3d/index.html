@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ashfall Protocol — 3D Block Action</title>
+<style>body{margin:0}#game{position:fixed;inset:0}</style>
+</head>
+<body><canvas id="game"></canvas><div id="ui"></div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from "three";
+import {CONFIG,Game,GameState} from "./src/core.js";
+import {World} from "./src/world.js";
+import {Player,InteractionController} from "./src/player.js";
+import {EnemyDirector,Boss,LootSystem} from "./src/entities.js";
+import {UIManager,installStyle} from "./src/ui.js";
+installStyle();
+class AshfallGame extends Game{
+ constructor(){super({THREE,canvas:document.getElementById('game'),UI:null});this.world=null;this.player=null;this.interaction=null;this.enemies=null;this.boss=null;this.loot=null;this.ui=new UIManager(this.bus,this);this.state.change(GameState.MENU);this.running=true;}
+ startNewGame(){this.profile=this.save.defaultData();this.buildWorld(Math.floor(Math.random()*100000));this.state.change(GameState.PLAYING);this.clock.last=performance.now();}
+ loadGame(){this.profile=this.save.load();this.buildWorld(this.profile.world?.seed||2026);if(this.profile.world)this.world.loadData(this.profile.world);if(this.profile.player)this.player.deserialize(this.profile.player);this.state.change(GameState.PLAYING);this.clock.last=performance.now();}
+ buildWorld(seed){this.scene.clear();this.world=new World(THREE,this.scene,seed).build();this.player=new Player(THREE,this.scene,this.world,this.bus,this.input,this.profile);this.interaction=new InteractionController(THREE,this,this.player,this.world,this.bus);this.enemies=new EnemyDirector(THREE,this.scene,this.bus,this.world,this.player);this.boss=new Boss(THREE,this.scene,this.bus,this.player);this.loot=new LootSystem(THREE,this.scene,this.bus);this.bus.on('enemy:died',e=>this.loot.drop(e.enemy.position,'coin',Math.max(1,Math.floor(e.reward/5))));this.bus.on('player:died',()=>this.state.change(GameState.GAME_OVER));this.bus.on('boss:defeated',()=>this.saveNow());}
+ update(dt){this.world.update(dt);this.player.update(dt);this.interaction.update();this.enemies.update(dt);this.boss.update(dt);this.loot.update(dt,this.player);this.player.updateCamera(this.camera);this.ui.update(this.player);}
+ togglePause(){if(this.state.is(GameState.PLAYING))this.state.change(GameState.PAUSED);else if(this.state.is(GameState.PAUSED))this.resume();}
+ resume(){this.state.change(GameState.PLAYING);this.clock.last=performance.now();}
+ toMenu(){this.state.change(GameState.MENU);}
+ saveNow(){if(!this.world||!this.player)return;this.profile.world=this.world.saveData();this.profile.player=this.player.serialize();this.save.save(this.profile);this.ui.toast('Oyun kaydedildi');}
+ resetSave(){localStorage.removeItem(CONFIG.saveKey);this.profile=this.save.defaultData();this.ui.toast('Kayıt silindi');}
+}
+window.AshfallGame=new AshfallGame();
+window.AshfallGame.loop();
+</script></body></html>
